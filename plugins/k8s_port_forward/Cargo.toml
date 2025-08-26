@@ -1,5 +1,5 @@
 [package]
-name = "proxy_plugin"
+name = "k8s_port_forward"
 version = "0.1.0"
 edition = "2021"
 

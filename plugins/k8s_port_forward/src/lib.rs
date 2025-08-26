@@ -8,7 +8,7 @@ use std::process;
 
 impl Plugin for ProxyPlugin {
     fn name(&self) -> &'static str {
-        "proxy_plugin"
+        "k8s_port_forward"
     }
 
     fn subcommand(&self) -> Command {
