@@ -94,8 +94,30 @@ fn spawn_kubectl_port_forward(fwd: &PortForward) {
         .stderr(Stdio::inherit());
     match cmd.spawn() {
         Ok(mut child) => {
-            println!("Spawned kubectl port-forward for {}", fwd.name);
-            // Optionally: child.wait().unwrap();
+            println!("Spawned kubectl port-forward for {} (blocking, Ctrl-C will terminate)", fwd.name);
+            // Set up Ctrl-C handler to kill child
+            let child_id = child.id();
+            let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+            let r = running.clone();
+            let _ = ctrlc::set_handler(move || {
+                r.store(false, std::sync::atomic::Ordering::SeqCst);
+                // Try to kill the child process
+                #[cfg(unix)]
+                unsafe {
+                    libc::kill(child_id as i32, libc::SIGTERM);
+                }
+                #[cfg(windows)]
+                {
+                    let _ = ProcessCommand::new("taskkill").arg("/PID").arg(child_id.to_string()).arg("/F").status();
+                }
+            });
+            // Wait for child to exit
+            let status = child.wait();
+            running.store(false, std::sync::atomic::Ordering::SeqCst);
+            match status {
+                Ok(s) => println!("kubectl exited with status: {}", s),
+                Err(e) => eprintln!("kubectl wait error: {}", e),
+            }
         }
         Err(e) => {
             eprintln!("Failed to spawn kubectl: {}", e);
