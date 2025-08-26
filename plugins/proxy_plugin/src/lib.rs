@@ -2,22 +2,17 @@ use plugin_api::Plugin;
 
 pub struct ProxyPlugin;
 
+use clap::{Command, Arg, ArgMatches};
+use log::{debug, info, warn, error};
+use std::process;
+
 impl Plugin for ProxyPlugin {
     fn name(&self) -> &'static str {
-        "ProxyPlugin"
+        "proxy_plugin"
     }
-    fn run(&self) {
-        use clap::{Arg, Command};
-        use log::{debug, info, warn, error};
-        use std::process;
 
-        // Initialize logger - set RUST_LOG environment variable to control level
-        env_logger::init();
-
-        debug!("Starting application");
-
-        let matches = Command::new("proxy")
-            .version("0.1.0")
+    fn subcommand(&self) -> Command {
+        Command::new(self.name())
             .about("A command line proxy tool")
             .arg(
                 Arg::new("port")
@@ -42,7 +37,10 @@ impl Plugin for ProxyPlugin {
                     .help("Enable verbose output")
                     .action(clap::ArgAction::SetTrue)
             )
-            .get_matches();
+    }
+
+    fn run(&self, matches: &ArgMatches) {
+        env_logger::init();
 
         let port = matches.get_one::<String>("port").unwrap();
         let target = matches.get_one::<String>("target").unwrap();
@@ -57,7 +55,6 @@ impl Plugin for ProxyPlugin {
             info!("Starting proxy on port {} -> {}", port, target);
         }
 
-        // Example of different log levels for debugging
         info!("Proxy CLI configured successfully");
         warn!("This is a warning message for testing");
         error!("This is an error message for testing");
@@ -68,8 +65,6 @@ impl Plugin for ProxyPlugin {
         println!("  Verbose: {}", verbose);
 
         debug!("About to exit application");
-
-        // For now, just exit successfully
         process::exit(0);
     }
 }
