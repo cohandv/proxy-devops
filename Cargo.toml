@@ -2,6 +2,13 @@
 name = "proxy"
 version = "0.1.0"
 edition = "2021"
+description = "A pluggable command-line proxy tool with dynamic plugin system"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/your-username/proxy"
+homepage = "https://github.com/your-username/proxy"
+documentation = "https://github.com/your-username/proxy/blob/main/README.md"
+keywords = ["proxy", "cli", "plugins", "kubernetes"]
+categories = ["command-line-utilities", "network-programming"]
 
 [dependencies]
 libloading = "0.8"

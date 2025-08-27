@@ -1,0 +1,159 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run tests
+        run: cargo test --all-features --workspace
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features --workspace -- -D warnings
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  build-cli:
+    name: Build CLI
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: proxy-linux-x86_64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: proxy-linux-aarch64
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            name: proxy-macos-x86_64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            name: proxy-macos-aarch64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: proxy-windows-x86_64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux)
+        if: matrix.os == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build CLI
+        run: cargo build --release --target ${{ matrix.target }} --bin proxy
+
+      - name: Rename binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          mv target/${{ matrix.target }}/release/proxy target/${{ matrix.target }}/release/${{ matrix.name }}
+
+      - name: Rename binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          mv target/${{ matrix.target }}/release/proxy.exe target/${{ matrix.target }}/release/${{ matrix.name }}
+
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/${{ matrix.name }}
+
+  build-plugins:
+    name: Build Plugins
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            ext: so
+            prefix: lib
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            ext: so
+            prefix: lib
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            ext: dylib
+            prefix: lib
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            ext: dylib
+            prefix: lib
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            ext: dll
+            prefix: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux)
+        if: matrix.os == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build plugins
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package plugins
+        shell: bash
+        run: |
+          mkdir -p plugins-${{ matrix.target }}
+          # Find all plugin dylibs/dlls and copy them
+          find target/${{ matrix.target }}/release -name "${{ matrix.prefix }}*.${{ matrix.ext }}" -not -name "${{ matrix.prefix }}plugin_api.${{ matrix.ext }}" -exec cp {} plugins-${{ matrix.target }}/ \;
+          # List what we found
+          ls -la plugins-${{ matrix.target }}/
+
+      - name: Upload plugins artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugins-${{ matrix.target }}
+          path: plugins-${{ matrix.target }}/
