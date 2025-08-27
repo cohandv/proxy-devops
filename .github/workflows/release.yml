@@ -152,7 +152,18 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }} --bin proxy
 
       - name: Build plugins
-        run: cargo build --release --target ${{ matrix.target }}
+        run: |
+          cargo build --release --target ${{ matrix.target }} --workspace
+          # Explicitly build plugin libraries
+          cargo build --release --target ${{ matrix.target }} -p k8s_port_forward
+
+      - name: Debug - List build output
+        run: |
+          echo "Contents of target/${{ matrix.target }}/release:"
+          ls -la target/${{ matrix.target }}/release/
+          echo ""
+          echo "Looking for files matching pattern: ${{ matrix.prefix }}*.${{ matrix.ext }}"
+          find target/${{ matrix.target }}/release -name "${{ matrix.prefix }}*.${{ matrix.ext }}" || echo "No files found with pattern"
 
       - name: Prepare CLI binary (Unix)
         if: matrix.os != 'windows-latest'
@@ -170,6 +181,9 @@ jobs:
         run: |
           mkdir -p plugins-package
           find target/${{ matrix.target }}/release -name "${{ matrix.prefix }}*.${{ matrix.ext }}" -not -name "${{ matrix.prefix }}plugin_api.${{ matrix.ext }}" -exec cp {} plugins-package/ \;
+          # Debug: List what we found
+          echo "Found plugin files:"
+          ls -la plugins-package/
           # Create README for plugins
           cat > plugins-package/README.md << 'EOF'
           # Proxy Plugins for ${{ matrix.target }}
@@ -200,6 +214,9 @@ jobs:
         run: |
           mkdir -p plugins-package
           find target/${{ matrix.target }}/release -name "*.${{ matrix.ext }}" -not -name "plugin_api.${{ matrix.ext }}" -exec cp {} plugins-package/ \;
+          # Debug: List what we found
+          echo "Found plugin files:"
+          ls -la plugins-package/
           # Create README for plugins
           cat > plugins-package/README.md << 'EOF'
           # Proxy Plugins for ${{ matrix.target }}
