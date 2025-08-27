@@ -6,9 +6,7 @@ use std::fs;
 use std::process::Command as ProcessCommand;
 use std::process::Stdio;
 use serde::Deserialize;
-use kube::{Client, api::Api};
-use tokio::runtime::Runtime;
-use k8s_openapi::api::core::v1::Pod;
+
 
 #[derive(Debug, Deserialize)]
 pub struct ForwardConfig {
@@ -17,7 +15,8 @@ pub struct ForwardConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct PortForward {
-    pub name: String,
+    pub name: Option<String>,
+    pub labels: Option<String>, // e.g. "app=nginx,version=v1"
     pub namespace: String,
     pub r#type: String, // "pod" or "service"
     pub local_port: u16,
@@ -37,11 +36,18 @@ local_port = 8080
 remote_port = 80
 
 [[forward]]
-name = "my-pod"
+labels = "app=nginx,version=v1"
 namespace = "default"
 type = "pod"
 local_port = 9090
 remote_port = 9000
+
+[[forward]]
+name = "my-pod"
+namespace = "default"
+type = "pod"
+local_port = 3000
+remote_port = 3000
 "#
     }
 }
@@ -50,28 +56,6 @@ fn load_config(plugin_name: &str) -> Option<ForwardConfig> {
     let config_path = plugin_api::plugin_config_path(plugin_name)?;
     let content = fs::read_to_string(config_path).ok()?;
     toml::from_str(&content).ok()
-}
-
-fn try_native_port_forward(fwd: &PortForward) -> Result<(), String> {
-    // Only support pod port-forwarding natively for now
-    if fwd.r#type != "pod" {
-        return Err("Native port-forward only supports pods".to_string());
-    }
-    let rt = Runtime::new().map_err(|e| e.to_string())?;
-    let pod_name = &fwd.name;
-    let ns = &fwd.namespace;
-    let local_port = fwd.local_port;
-    let remote_port = fwd.remote_port;
-    rt.block_on(async move {
-        let client = Client::try_default().await.map_err(|e| e.to_string())?;
-        let pods: Api<Pod> = Api::namespaced(client, ns);
-        // NOTE: Portforward is behind the ws feature, so this is a placeholder for real implementation
-        // let mut pf = pods.portforward(pod_name, &[remote_port]).await.map_err(|e| e.to_string())?;
-        // let (mut stream, _handle) = pf.take_stream(remote_port).map_err(|e| e.to_string())?;
-        // For demo, just print what would happen
-        println!("(Native) Would port-forward pod {}:{} -> localhost:{}", pod_name, remote_port, local_port);
-        Ok(())
-    })
 }
 
 fn spawn_kubectl_port_forward(fwd: &PortForward) {
@@ -83,18 +67,74 @@ fn spawn_kubectl_port_forward(fwd: &PortForward) {
             return;
         }
     };
-    let target = format!("{}/{}", kind, fwd.name);
+
     let port_map = format!("{}:{}", fwd.local_port, fwd.remote_port);
     let mut cmd = ProcessCommand::new("kubectl");
-    cmd.arg("port-forward")
-        .arg(target)
-        .arg(port_map)
+    cmd.arg("port-forward");
+
+    // Handle name vs labels
+    match (&fwd.name, &fwd.labels) {
+        (Some(name), None) => {
+            let target = format!("{}/{}", kind, name);
+            cmd.arg(target);
+        }
+        (_, Some(labels)) => {
+            // First, list matching resources to show what we found
+            let mut list_cmd = ProcessCommand::new("kubectl");
+            list_cmd.arg("get")
+                .arg(kind)
+                .arg("-l").arg(labels)
+                .arg("-n").arg(&fwd.namespace)
+                .arg("--no-headers")
+                .arg("-o").arg("name");
+
+            match list_cmd.output() {
+                Ok(output) => {
+                    let resources: Vec<&str> = std::str::from_utf8(&output.stdout)
+                        .unwrap_or("")
+                        .lines()
+                        .filter(|line| !line.is_empty())
+                        .collect();
+
+                    if resources.is_empty() {
+                        eprintln!("No {} found matching labels: {}", kind, labels);
+                        return;
+                    } else if resources.len() > 1 {
+                        println!("Found {} {}(s) matching labels '{}': {}",
+                                resources.len(), kind, labels,
+                                resources.join(", "));
+                        println!("Using the first one: {}", resources[0]);
+                    } else {
+                        println!("Found {} matching labels '{}': {}", kind, labels, resources[0]);
+                    }
+
+                    // Use the actual name of the first resource
+                    cmd.arg(resources[0]);
+                }
+                Err(e) => {
+                    eprintln!("Failed to list resources with labels {}: {}", labels, e);
+                    return;
+                }
+            }
+        }
+        (None, None) => {
+            eprintln!("Must specify either 'name' or 'labels' for port-forward config");
+            return;
+        }
+    }
+
+    cmd.arg(port_map)
         .arg("-n").arg(&fwd.namespace)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
     match cmd.spawn() {
         Ok(mut child) => {
-            println!("Spawned kubectl port-forward for {} (blocking, Ctrl-C will terminate)", fwd.name);
+            let target_desc = match (&fwd.name, &fwd.labels) {
+                (Some(name), None) => name.clone(),
+                (None, Some(labels)) => format!("labels:{}", labels),
+                _ => "unknown".to_string(),
+            };
+            println!("Spawned kubectl port-forward for {} (blocking, Ctrl-C will terminate)", target_desc);
             // Set up Ctrl-C handler to kill child
             let child_id = child.id();
             let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
@@ -149,7 +189,10 @@ impl Plugin for ProxyPlugin {
             Some(cfg) => {
                 let name_filter = matches.get_one::<String>("name");
                 let forwards: Vec<_> = match name_filter {
-                    Some(name) => cfg.forward.into_iter().filter(|f| &f.name == name).collect(),
+                    Some(name) => cfg.forward.into_iter().filter(|f|
+                        f.name.as_ref() == Some(name) ||
+                        f.labels.as_ref().map_or(false, |labels| labels.contains(name))
+                    ).collect(),
                     None => cfg.forward,
                 };
                 if forwards.is_empty() {
@@ -161,15 +204,16 @@ impl Plugin for ProxyPlugin {
                 } else {
                     println!("Loaded k8s_port_forward config:");
                     for fwd in forwards {
+                        let target_desc = match (&fwd.name, &fwd.labels) {
+                            (Some(name), None) => name.clone(),
+                            (None, Some(labels)) => format!("labels:{}", labels),
+                            _ => "invalid-config".to_string(),
+                        };
                         println!(
                             "  {} {}:{} -> localhost:{}",
-                            fwd.r#type, fwd.name, fwd.remote_port, fwd.local_port
+                            fwd.r#type, target_desc, fwd.remote_port, fwd.local_port
                         );
-                        // Try native port-forwarding (kube crate)
-                        if let Err(e) = try_native_port_forward(&fwd) {
-                            eprintln!("Native port-forward failed: {}. Falling back to kubectl...", e);
-                            spawn_kubectl_port_forward(&fwd);
-                        }
+                        spawn_kubectl_port_forward(&fwd);
                     }
                 }
             }
@@ -195,9 +239,16 @@ local_port = 8080
 remote_port = 80
 
 [[forward]]
-name = "my-pod"
+labels = "app=nginx,version=v1"
 namespace = "default"
 type = "pod"
 local_port = 9090
 remote_port = 9000
+
+[[forward]]
+name = "my-pod"
+namespace = "default"
+type = "pod"
+local_port = 3000
+remote_port = 3000
 */
