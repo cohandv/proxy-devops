@@ -12,7 +12,7 @@ pub struct ForwardConfig {
     pub forward: Vec<PortForward>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct PortForward {
     pub name: Option<String>,
     pub labels: Option<String>, // e.g. "app=nginx,version=v1"
@@ -215,16 +215,29 @@ impl Plugin for ProxyPlugin {
             Some(cfg) => {
                 let name_filter = matches.get_one::<String>("name");
                 let forwards: Vec<_> = match name_filter {
-                    Some(name) => cfg
-                        .forward
-                        .into_iter()
-                        .filter(|f| {
-                            f.name.as_ref() == Some(name)
-                                || f.labels
-                                    .as_ref()
-                                    .is_some_and(|labels| labels.contains(name))
-                        })
-                        .collect(),
+                    Some(name) => {
+                        // Find exact name match first
+                        let exact_matches: Vec<_> = cfg
+                            .forward
+                            .iter()
+                            .filter(|f| f.name.as_ref() == Some(name))
+                            .cloned()
+                            .collect();
+
+                        if !exact_matches.is_empty() {
+                            exact_matches
+                        } else {
+                            // If no exact name match, try label substring match
+                            cfg.forward
+                                .into_iter()
+                                .filter(|f| {
+                                    f.labels
+                                        .as_ref()
+                                        .is_some_and(|labels| labels.contains(name))
+                                })
+                                .collect()
+                        }
+                    }
                     None => cfg.forward,
                 };
                 if forwards.is_empty() {
@@ -234,19 +247,39 @@ impl Plugin for ProxyPlugin {
                         eprintln!("No port-forward configs found in config file");
                     }
                 } else {
-                    println!("Loaded k8s_port_forward config:");
-                    for fwd in forwards {
-                        let target_desc = match (&fwd.name, &fwd.labels) {
-                            (Some(name), None) => name.clone(),
-                            (None, Some(labels)) => format!("labels:{}", labels),
-                            _ => "invalid-config".to_string(),
-                        };
-                        println!(
-                            "  {} {}:{} -> localhost:{}",
-                            fwd.r#type, target_desc, fwd.remote_port, fwd.local_port
-                        );
-                        spawn_kubectl_port_forward(&fwd);
+                    if forwards.len() > 1 && name_filter.is_some() {
+                        println!("Found {} matching configurations:", forwards.len());
+                        for fwd in &forwards {
+                            let target_desc = match (&fwd.name, &fwd.labels) {
+                                (Some(name), None) => name.clone(),
+                                (None, Some(labels)) => format!("labels:{}", labels),
+                                _ => "invalid-config".to_string(),
+                            };
+                            println!(
+                                "  {} {}:{} -> localhost:{}",
+                                fwd.r#type, target_desc, fwd.remote_port, fwd.local_port
+                            );
+                        }
+                        println!("Using the first match only.\n");
                     }
+
+                    // Only use the first forward to avoid conflicts
+                    let fwd = &forwards[0];
+                    let target_desc = match (&fwd.name, &fwd.labels) {
+                        (Some(name), None) => name.clone(),
+                        (None, Some(labels)) => format!("labels:{}", labels),
+                        _ => "invalid-config".to_string(),
+                    };
+
+                    if forwards.len() == 1 || name_filter.is_none() {
+                        println!("Starting port-forward:");
+                    }
+                    println!(
+                        "  {} {}:{} -> localhost:{}",
+                        fwd.r#type, target_desc, fwd.remote_port, fwd.local_port
+                    );
+
+                    spawn_kubectl_port_forward(fwd);
                 }
             }
             None => {
