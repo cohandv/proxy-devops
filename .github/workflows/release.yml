@@ -22,6 +22,8 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -226,21 +228,21 @@ jobs:
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ needs.create-release.outputs.tag }}
           files: |
             ${{ matrix.cli_name }}
             ${{ matrix.plugins_name }}
 
   publish-checksums:
     name: Publish Checksums
-    needs: [build-and-upload]
+    needs: [create-release, build-and-upload]
     runs-on: ubuntu-latest
     steps:
       - name: Download all release assets
         uses: robinraju/release-downloader@v1.8
         with:
           repository: ${{ github.repository }}
-          tag: ${{ github.ref_name }}
+          tag: ${{ needs.create-release.outputs.tag }}
           tarBall: false
           zipBall: false
           out-file-path: assets/
@@ -254,5 +256,5 @@ jobs:
       - name: Upload checksums
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ needs.create-release.outputs.tag }}
           files: ./assets/SHA256SUMS
