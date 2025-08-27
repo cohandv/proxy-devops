@@ -11,6 +11,10 @@ on:
         required: true
         default: 'v0.1.0'
 
+permissions:
+  contents: write
+  packages: write
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -18,9 +22,6 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      release_id: ${{ steps.create_release.outputs.id }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,12 +37,10 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
-          release_name: Release ${{ steps.tag.outputs.tag }}
+          name: Release ${{ steps.tag.outputs.tag }}
           body: |
             ## Changes in this Release
 
@@ -224,29 +223,17 @@ jobs:
           # Use PowerShell to create zip on Windows
           powershell Compress-Archive -Path plugins-package\* -DestinationPath ${{ matrix.plugins_name }}
 
-      - name: Upload CLI binary
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v1
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./${{ matrix.cli_name }}
-          asset_name: ${{ matrix.cli_name }}
-          asset_content_type: application/octet-stream
-
-      - name: Upload plugins package
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./${{ matrix.plugins_name }}
-          asset_name: ${{ matrix.plugins_name }}
-          asset_content_type: ${{ matrix.os == 'windows-latest' && 'application/zip' || 'application/gzip' }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            ${{ matrix.cli_name }}
+            ${{ matrix.plugins_name }}
 
   publish-checksums:
     name: Publish Checksums
-    needs: [create-release, build-and-upload]
+    needs: [build-and-upload]
     runs-on: ubuntu-latest
     steps:
       - name: Download all release assets
@@ -265,11 +252,7 @@ jobs:
           cat SHA256SUMS
 
       - name: Upload checksums
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./assets/SHA256SUMS
-          asset_name: SHA256SUMS
-          asset_content_type: text/plain
+          tag_name: ${{ github.ref_name }}
+          files: ./assets/SHA256SUMS

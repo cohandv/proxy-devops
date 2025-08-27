@@ -14,6 +14,8 @@ use clap::{ArgMatches, Command};
 
 pub trait Plugin {
     fn name(&self) -> &'static str;
+    fn version(&self) -> &'static str;
+    fn description(&self) -> &'static str;
     fn subcommand(&self) -> Command;
     fn run(&self, matches: &ArgMatches);
 }

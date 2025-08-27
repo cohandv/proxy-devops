@@ -188,6 +188,14 @@ impl Plugin for ProxyPlugin {
         "k8s_port_forward"
     }
 
+    fn version(&self) -> &'static str {
+        env!("CARGO_PKG_VERSION")
+    }
+
+    fn description(&self) -> &'static str {
+        "Kubernetes port forwarding with name and label support"
+    }
+
     fn subcommand(&self) -> Command {
         Command::new(self.name())
             .about("Port-forward as defined in config file (~/.cohandv/proxy/config/plugins.d/k8s_port_forward.conf)")
