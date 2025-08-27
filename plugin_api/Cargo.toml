@@ -2,6 +2,8 @@
 name = "plugin_api"
 version = "0.1.0"
 edition = "2021"
+description = "Plugin API for the proxy tool"
+license = "MIT OR Apache-2.0"
 
 [lib]
 crate-type = ["rlib", "dylib"]

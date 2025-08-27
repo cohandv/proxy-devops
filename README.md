@@ -245,10 +245,76 @@ fn load_config(plugin_name: &str) -> Option<MyConfig> {
 
 ### Development Workflow
 
-1. **Make changes** to plugin code
-2. **Build**: `cargo build`
-3. **Test**: `./target/debug/proxy plugin_name --help`
-4. **Debug**: Use standard Rust debugging tools
+1. **Setup pre-commit hooks** (recommended):
+   ```bash
+   ./scripts/setup-pre-commit.sh
+   ```
+2. **Make changes** to plugin code
+3. **Build**: `cargo build`
+4. **Test**: `./target/debug/proxy plugin_name --help`
+5. **Debug**: Use standard Rust debugging tools
+
+### Code Quality with Pre-commit Hooks
+
+The project uses pre-commit hooks to automatically maintain code quality before each commit.
+
+#### **Setup Pre-commit (One-time)**
+```bash
+# Run the automated setup script
+./scripts/setup-pre-commit.sh
+
+# Or install manually:
+pip install pre-commit    # Install pre-commit tool
+pre-commit install        # Install git hooks
+```
+
+#### **How Pre-commit Works**
+
+**Automatic execution** on every `git commit`:
+```bash
+git add .
+git commit -m "my changes"
+
+# This automatically runs:
+# ✅ trailing-whitespace: Remove trailing spaces
+# ✅ end-of-file-fixer: Ensure files end with newline
+# ✅ check-yaml: Validate YAML syntax
+# ✅ check-toml: Validate TOML syntax
+# ✅ check-merge-conflict: Find merge conflict markers
+# ✅ cargo fmt: Format Rust code
+# ✅ cargo clippy: Lint Rust code (fail on warnings)
+# ✅ cargo test: Run all tests
+```
+
+**If hooks fail**, the commit is blocked until you fix the issues:
+```bash
+cargo fmt........................................Failed
+# Fix the formatting issues, then commit again
+```
+
+#### **Manual Control**
+```bash
+# Test all hooks without committing
+pre-commit run --all-files
+
+# Run specific hook only
+pre-commit run cargo-fmt
+
+# Skip hooks for emergency commits
+git commit --no-verify -m "emergency fix"
+
+# Skip specific hooks
+SKIP=cargo-test git commit -m "skip tests"
+
+# Update hooks to latest versions
+pre-commit autoupdate
+```
+
+#### **Benefits**
+- **Consistent formatting**: Code is always properly formatted
+- **Early bug detection**: Clippy catches issues before they reach CI
+- **Faster CI**: Pre-commit catches issues locally first
+- **Team consistency**: Everyone follows the same quality standards
 
 ### VSCode Configuration
 

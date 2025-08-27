@@ -32,11 +32,11 @@ fn main() {
                 }
                 unsafe {
                     let lib = Library::new(&path).unwrap();
-                    let constructor: Result<Symbol<unsafe extern fn() -> Box<dyn Plugin>>, _> =
+                    let constructor: Result<Symbol<unsafe extern "C" fn() -> Box<dyn Plugin>>, _> =
                         lib.get(b"create_plugin");
                     if let Ok(constructor) = constructor {
                         let plugin = constructor();
-                        app = app.subcommand((&*plugin).subcommand());
+                        app = app.subcommand((*plugin).subcommand());
                         plugins.push((lib, plugin)); // Keep lib alive!
                     }
                 }
@@ -48,7 +48,7 @@ fn main() {
 
     for (_, plugin) in plugins {
         if let Some(sub_m) = matches.subcommand_matches(plugin.name()) {
-            (&*plugin).run(sub_m);
+            (*plugin).run(sub_m);
         }
     }
 }

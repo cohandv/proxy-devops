@@ -2,6 +2,8 @@
 name = "k8s_port_forward"
 version = "0.1.0"
 edition = "2021"
+description = "Kubernetes port forwarding plugin for the proxy tool"
+license = "MIT OR Apache-2.0"
 
 [lib]
 crate-type = ["cdylib"]

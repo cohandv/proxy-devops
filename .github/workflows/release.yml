@@ -128,6 +128,8 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: 1.81.0
+          components: rustfmt, clippy
           targets: ${{ matrix.target }}
 
       - name: Cache dependencies

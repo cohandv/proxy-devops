@@ -5,11 +5,12 @@ pub fn plugin_config_path(plugin_name: &str) -> Option<PathBuf> {
         Some(PathBuf::from(dir).join(format!("{plugin_name}.conf")))
     } else {
         dirs::home_dir().map(|h| {
-            h.join(".cohandv/proxy/config/plugins.d").join(format!("{plugin_name}.conf"))
+            h.join(".cohandv/proxy/config/plugins.d")
+                .join(format!("{plugin_name}.conf"))
         })
     }
 }
-use clap::{Command, ArgMatches};
+use clap::{ArgMatches, Command};
 
 pub trait Plugin {
     fn name(&self) -> &'static str;

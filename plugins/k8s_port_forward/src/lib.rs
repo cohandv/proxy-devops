@@ -1,12 +1,11 @@
 // --- Module scope ---
+use clap::{Arg, ArgMatches, Command};
 use plugin_api::Plugin;
-use clap::{Command, Arg, ArgMatches};
-use log::{debug, info, warn, error};
+// Removed unused log imports
+use serde::Deserialize;
 use std::fs;
 use std::process::Command as ProcessCommand;
 use std::process::Stdio;
-use serde::Deserialize;
-
 
 #[derive(Debug, Deserialize)]
 pub struct ForwardConfig {
@@ -81,12 +80,16 @@ fn spawn_kubectl_port_forward(fwd: &PortForward) {
         (_, Some(labels)) => {
             // First, list matching resources to show what we found
             let mut list_cmd = ProcessCommand::new("kubectl");
-            list_cmd.arg("get")
+            list_cmd
+                .arg("get")
                 .arg(kind)
-                .arg("-l").arg(labels)
-                .arg("-n").arg(&fwd.namespace)
+                .arg("-l")
+                .arg(labels)
+                .arg("-n")
+                .arg(&fwd.namespace)
                 .arg("--no-headers")
-                .arg("-o").arg("name");
+                .arg("-o")
+                .arg("name");
 
             match list_cmd.output() {
                 Ok(output) => {
@@ -100,12 +103,19 @@ fn spawn_kubectl_port_forward(fwd: &PortForward) {
                         eprintln!("No {} found matching labels: {}", kind, labels);
                         return;
                     } else if resources.len() > 1 {
-                        println!("Found {} {}(s) matching labels '{}': {}",
-                                resources.len(), kind, labels,
-                                resources.join(", "));
+                        println!(
+                            "Found {} {}(s) matching labels '{}': {}",
+                            resources.len(),
+                            kind,
+                            labels,
+                            resources.join(", ")
+                        );
                         println!("Using the first one: {}", resources[0]);
                     } else {
-                        println!("Found {} matching labels '{}': {}", kind, labels, resources[0]);
+                        println!(
+                            "Found {} matching labels '{}': {}",
+                            kind, labels, resources[0]
+                        );
                     }
 
                     // Use the actual name of the first resource
@@ -124,7 +134,8 @@ fn spawn_kubectl_port_forward(fwd: &PortForward) {
     }
 
     cmd.arg(port_map)
-        .arg("-n").arg(&fwd.namespace)
+        .arg("-n")
+        .arg(&fwd.namespace)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
     match cmd.spawn() {
@@ -134,7 +145,10 @@ fn spawn_kubectl_port_forward(fwd: &PortForward) {
                 (None, Some(labels)) => format!("labels:{}", labels),
                 _ => "unknown".to_string(),
             };
-            println!("Spawned kubectl port-forward for {} (blocking, Ctrl-C will terminate)", target_desc);
+            println!(
+                "Spawned kubectl port-forward for {} (blocking, Ctrl-C will terminate)",
+                target_desc
+            );
             // Set up Ctrl-C handler to kill child
             let child_id = child.id();
             let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
@@ -148,7 +162,11 @@ fn spawn_kubectl_port_forward(fwd: &PortForward) {
                 }
                 #[cfg(windows)]
                 {
-                    let _ = ProcessCommand::new("taskkill").arg("/PID").arg(child_id.to_string()).arg("/F").status();
+                    let _ = ProcessCommand::new("taskkill")
+                        .arg("/PID")
+                        .arg(child_id.to_string())
+                        .arg("/F")
+                        .status();
                 }
             });
             // Wait for child to exit
@@ -189,10 +207,16 @@ impl Plugin for ProxyPlugin {
             Some(cfg) => {
                 let name_filter = matches.get_one::<String>("name");
                 let forwards: Vec<_> = match name_filter {
-                    Some(name) => cfg.forward.into_iter().filter(|f|
-                        f.name.as_ref() == Some(name) ||
-                        f.labels.as_ref().map_or(false, |labels| labels.contains(name))
-                    ).collect(),
+                    Some(name) => cfg
+                        .forward
+                        .into_iter()
+                        .filter(|f| {
+                            f.name.as_ref() == Some(name)
+                                || f.labels
+                                    .as_ref()
+                                    .is_some_and(|labels| labels.contains(name))
+                        })
+                        .collect(),
                     None => cfg.forward,
                 };
                 if forwards.is_empty() {
@@ -225,6 +249,7 @@ impl Plugin for ProxyPlugin {
 }
 
 #[no_mangle]
+#[allow(improper_ctypes_definitions)]
 pub extern "C" fn create_plugin() -> Box<dyn Plugin> {
     Box::new(ProxyPlugin)
 }
