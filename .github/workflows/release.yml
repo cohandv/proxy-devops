@@ -153,9 +153,10 @@ jobs:
 
       - name: Build plugins
         run: |
-          cargo build --release --target ${{ matrix.target }} --workspace
-          # Explicitly build plugin libraries
+          # Build all workspace libraries explicitly
+          cargo build --release --target ${{ matrix.target }} -p plugin_api
           cargo build --release --target ${{ matrix.target }} -p k8s_port_forward
+          cargo build --release --target ${{ matrix.target }} -p ollama_chat
 
       - name: Debug - List build output (Unix)
         if: matrix.os != 'windows-latest'

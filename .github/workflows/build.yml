@@ -156,7 +156,10 @@ jobs:
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
       - name: Build plugins
-        run: cargo build --release --target ${{ matrix.target }}
+        run: |
+          cargo build --release --target ${{ matrix.target }} -p plugin_api
+          cargo build --release --target ${{ matrix.target }} -p k8s_port_forward
+          cargo build --release --target ${{ matrix.target }} -p ollama_chat
 
       - name: Package plugins
         shell: bash

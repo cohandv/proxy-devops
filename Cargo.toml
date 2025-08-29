@@ -23,5 +23,6 @@ tokio = { version = "1.0", features = ["full"] }
 [workspace]
 members = [
     "plugin_api",
-    "plugins/k8s_port_forward"
+    "plugins/k8s_port_forward",
+    "plugins/ollama_chat"
 ]
