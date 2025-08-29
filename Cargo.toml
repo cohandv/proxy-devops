@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "network-programming"]
 libloading = "0.8"
 plugin_api = { path = "./plugin_api" }
 clap = { version = "4", features = ["derive"] }
-dirs = "5"
+dirs = "6"
 log = "0.4"
 env_logger = "0.10"
 anyhow = "1.0"
