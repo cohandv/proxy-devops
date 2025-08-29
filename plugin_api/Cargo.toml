@@ -10,4 +10,4 @@ crate-type = ["rlib", "dylib"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-dirs = "5"
+dirs = "6"
