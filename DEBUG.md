@@ -163,3 +163,4 @@ valgrind target/debug/proxy --target http://example.com
 - Clean build artifacts: `cargo clean && cargo build`
 - Update dependencies: `cargo update`
 - Check for conflicting versions: `cargo tree`
+# Test ARM64 build fix
