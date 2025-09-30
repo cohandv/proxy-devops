@@ -1,0 +1,29 @@
+[package]
+name = "k8s_native_port_forward"
+version = "0.1.0"
+edition = "2021"
+description = "Native Kubernetes port forwarding plugin with protocol-aware message logging"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+plugin_api = { path = "../../plugin_api" }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+tokio = { version = "1", features = ["full"] }
+kube = { version = "0.91", features = ["runtime", "derive", "ws"] }
+k8s-openapi = { version = "0.22", features = ["v1_26"] }
+anyhow = "1.0"
+futures = "0.3"
+bytes = "1.0"
+hex = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+ctrlc = "3.4"
+hyper = { version = "1.0", features = ["full"] }
+http = "1.0"
+tokio-util = { version = "0.7", features = ["codec"] }
+tokio-tungstenite = "0.20"
+http-body-util = "0.1"
